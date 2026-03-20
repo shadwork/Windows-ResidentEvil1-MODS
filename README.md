@@ -1,4 +1,4 @@
-﻿![SHDP Mods](images/mod_launcher_logo.png)
+﻿![SHDP Mods](images/mod_launcher_logo.jpg)
 
 # Resident Evil 1 SHDP Mods
 
