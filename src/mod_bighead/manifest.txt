@@ -1,0 +1,3 @@
+[MOD]
+Name = Bighead
+Module = mod-bighead.dll

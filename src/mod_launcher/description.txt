@@ -1,0 +1,3 @@
+Proxy DLL that loads multiple mod DLLs from mods_list.ini.
+Forwards Modsdk_post_init, Modsdk_load, and Modsdk_save to all loaded mods.
+Allows running multiple mods simultaneously through a single Classic REbirth slot.

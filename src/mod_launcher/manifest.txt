@@ -1,0 +1,3 @@
+[MOD]
+Name = Mod Launcher
+Module = mod-launcher.dll

@@ -1,0 +1,5 @@
+﻿# Bighead
+
+Scales the head bone of player and enemies to make their heads bigger.
+Hooks GsMulMatrix to scale during rendering. Head bone auto-detected
+for player, fixed index 2 for zombies. Includes bone enumerate debug mode.

@@ -1,0 +1,3 @@
+[MOD]
+Name = Doorskip
+Module = mod-doorskip.dll

@@ -1,0 +1,189 @@
+Door Skip Mod — Speed-Up Research Results
+==========================================
+
+Target: RE1 PC (MediaKite / Classic REbirth mod-SDK)
+Module: mod-doorskip.dll
+
+
+1. DOOR TRANSITION ARCHITECTURE
+================================
+
+Main game loop: FUN_0048cdd0
+  - Runs as a cooperative task, yields each frame via Task_sleep(1)
+  - When door activated (DAT_00c384eb = 1), exits inner loop
+  - Starts fade-out: FUN_0048b190(2, 0x600) or FUN_0048b190(2, 0xC00)
+  - Calls FUN_0048d660() for room transition
+
+Room transition: FUN_0048d660 (at 0x0048D660)
+  - FUN_004673a0(param)        sound file loading
+  - FUN_0043ee60()             door model data
+  - FUN_00417cf0(1, LAB_435ad0) start animation task
+  - FUN_00417d20(1)            Task_sleep(1)  <<<< 670ms DELAY
+  - FUN_004657a0()             enemy/scene init
+  - FUN_0041b020()             VRAM/room loading (main bottleneck)
+  - while (DAT_00c33090 & 0x4000000) { Task_sleep(1); }  wait for animation
+  - FUN_00414a80()             sprite/object loading
+  - FUN_00414ad0()             RRC scene setup
+  - FUN_0048f8f0()             post-load
+  - FUN_00467e20()             GPU/palette setup
+  - FUN_00464d80()             callbacks
+
+Animation task: LAB_00435ad0
+  - FUN_00435720()  setup: sets DAT_00c33090 |= 0x4000000, Task_sleep(1)
+  - FUN_004358a0()  animation loop (REPLACED by skip_door_anim)
+  - FUN_00435860()  cleanup: clears 0x4000000, sets fade counter = -1
+  - Task_exit
+
+Cooperative task scheduler: FUN_0049127c / FUN_00491268 / FUN_00491288
+  - Assembly-level context switching (stack save/restore)
+  - Tasks yield via Task_sleep (FUN_00417d20) which sets sleep counter and status
+
+
+2. FADE SYSTEM
+===============
+
+Globals:
+  - DAT_00c38704 (s16): fade counter
+      >= 0: overlay rendered (0 = transparent, 0x7FFF = full black)
+      < 0:  overlay not rendered
+  - DAT_00c3ab9a (u16): fade speed (added to counter each frame)
+
+Fade-out initiated by FUN_0048b190(mode, speed):
+  - Two paths in FUN_0048cdd0:
+    - With flag 0x2000000: PUSH 0x600 at 0x48d3aa  (~700ms to full black)
+    - Without flag:        PUSH 0xC00 at 0x48d415  (~350ms to full black)
+  - Counter wraps past 0x7FFF -> negative = "complete"
+
+Fade-in controlled by switch in FUN_0048cdd0 inner loop:
+  - DAT_00c384e4 state machine (cases 0-3)
+  - Case 3 checks DAT_00c38704 < 0 -> calls FUN_0048d5b0 (post-transition)
+
+
+3. ROOT CAUSE OF 670ms DELAY
+==============================
+
+The Task_sleep(1) at 0x48d71e in FUN_0048d660 yields to the cooperative
+scheduler. During this yield, the scheduler runs:
+  - The fade-out task: updates counter by +0x600 each frame
+  - The animation task: setup -> animation loop -> cleanup
+
+The fade-out at speed 0x600 takes: 0x7FFF / 0x600 = 21.3 frames
+At ~33ms/frame (30fps) = ~703ms
+
+Measured delay: 669-700ms (matches fade-out duration exactly)
+
+The room loading (scene_init, vram_load, etc.) only begins AFTER this
+Task_sleep returns. So the fade-out delay is purely additive overhead.
+
+
+4. VRAM LOADING BREAKDOWN (FUN_0041b020)
+==========================================
+
+Sub-calls within FUN_0041b020 (at 0x0041B020):
+
+  Function          Address     Typical Time
+  --------          -------     ------------
+  FUN_0041b690      0x41B2B8    250-400ms   RDT file load from disk
+  FUN_0041c090      0x41B318      0ms       room processing
+  FUN_004676d0      0x41B327     7-68ms     sound ROM setup
+  FUN_00473440      0x41B348    47-57ms     effect sprites
+  FUN_0042e190      0x41B450      0ms       event/scenario
+  FUN_00414c10      0x41B5E8    (no fire)   background images (alt path)
+  FUN_0046cf20      0x41B609     0-30ms     mask data
+
+Total vram_load: 420-830ms (dominated by RDT file I/O)
+
+Note: FUN_00414c10 (background loading) hooks never fire because the game
+uses the DAT_004ac494 != 0 code path, not the DAT_004ac494 == 0 path where
+the inner loop with fopen/fread/decompress resides.
+
+
+5. SOLUTION: TWO PATCHES
+==========================
+
+Patch 1 — Skip door animation (ADDR_ANIM_CALL = 0x00435AD5)
+  Replace CALL FUN_004358a0 with CALL skip_door_anim
+  skip_door_anim: returns immediately (no animation loop)
+
+Patch 2 — Eliminate fade-out delay (ADDR_FIRST_SLEEP = 0x0048D71E)
+  Replace CALL FUN_00417d20 with CALL skip_first_sleep
+  skip_first_sleep:
+    - Sets fade counter (0xC38704) = 0x7FFF (instant full black)
+    - Sets fade speed (0xC3AB9A) = 0 (hold black during loading)
+    - Returns without sleeping (no scheduler yield)
+
+The while loop at 0x48D821 still yields ~2 frames to let the animation
+task complete its setup/cleanup cycle. This is required because:
+  - FUN_00435720 (setup) sets DAT_00c33090 |= 0x4000000 and Task_sleep(1)
+  - FUN_00435860 (cleanup) clears 0x4000000 and sets fade counter = -1
+  - The while loop waits for 0x4000000 to clear
+
+
+6. PERFORMANCE RESULTS
+=======================
+
+BEFORE (animation skip only):
+  Fade-out delay:     ~670ms
+  Room loading:       ~420-830ms
+  Post-load:          ~90ms
+  TOTAL:              ~1200-1500ms
+
+AFTER (animation skip + sleep elimination):
+  Fade-out delay:     ~0ms (eliminated)
+  Room loading:       ~420-830ms
+  Post-load:          ~90ms
+  TOTAL:              ~510-920ms
+
+Speedup: ~2.5-2.7x faster door transitions
+No visual glitches observed.
+
+
+7. FAILED APPROACHES (for reference)
+======================================
+
+a) Patching fade counter/speed from within skip_door_anim:
+   - Setting FADE_SPEED = 0x7F00 caused "text glitch" — counter wrapped
+     negative in 2 frames, removing black overlay during loading, exposing
+     stale framebuffer content.
+
+b) Freezing fade counter at -1 with speed = 0:
+   - Counter < 0 = no overlay. Old room content visible during loading.
+
+c) Setting fade counter = 0x7FFF after animation cleanup:
+   - Game hung. The while loop or scheduler got confused by state mismatch.
+
+d) Hooking background image loading inner loop (FUN_00414c10):
+   - Hooks at 0x414CAF, 0x414CC1, 0x414CED, 0x414CF9 never fired.
+   - Game uses alternate code path (DAT_004ac494 != 0).
+
+Key lesson: The working approach forces the screen black BEFORE loading
+starts (at the Task_sleep call site), not during or after the animation.
+This keeps the overlay visible throughout loading.
+
+
+8. KEY ADDRESSES
+=================
+
+Game functions:
+  0x004358a0  Animation loop (hooked)
+  0x00417d20  Task_sleep
+  0x00417cf0  Task_start
+  0x0048d660  Room transition entry
+  0x0048cdd0  Main game loop
+  0x0048b190  Fade start
+  0x0041b020  VRAM/room loading
+  0x0041b690  RDT file load
+  0x00435720  Animation setup
+  0x00435860  Animation cleanup
+  0x0049127c  Scheduler (context switch)
+
+Globals:
+  0x00C38704  Fade counter (s16)
+  0x00C3AB9A  Fade speed (u16)
+  0x00C33090  Flags (bit 0x4000000 = animation in progress)
+  0x00C384EB  Door state (0/1/2/3)
+  0x00C3F8BC  Current task control block pointer
+
+Hook sites:
+  0x00435AD5  CALL FUN_004358a0 -> skip_door_anim
+  0x0048D71E  CALL FUN_00417d20 -> skip_first_sleep

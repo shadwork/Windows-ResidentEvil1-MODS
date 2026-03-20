@@ -1,0 +1,3 @@
+[MOD]
+Name = Healthbar
+Module = mod-healthbar.dll

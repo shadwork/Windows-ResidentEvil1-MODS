@@ -1,0 +1,6 @@
+﻿# Healthbar
+
+Displays HP bars above player and enemies using Add_line rendering.
+Bar length proportional to HP. Player bar is green, enemy bars are red.
+Positions aligned to entity bounding box via GsRotTransPers projection.
+Supports hook chaining for compatibility with other mods.
