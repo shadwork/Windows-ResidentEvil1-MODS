@@ -8,10 +8,10 @@ A collection of mods for Resident Evil 1 PC (Classic REbirth / RE1 HD).
 
 | Mod | Description |
 |-----|-------------|
-| [Bighead](src/mod_bighead/readme.md) | Scales the head bone of player and enemies to make their heads bigger. |
-| [Doorskip](src/mod_doorskip/readme.md) | Skips the door-opening transition animations that mask loading times. |
-| [Healthbar](src/mod_healthbar/readme.md) | Displays HP bars above player and enemies using Add_line rendering. |
-| [Mod Launcher](src/mod_launcher/readme.md) | Proxy DLL that loads multiple mod DLLs from mods_list.ini. |
+| [Bighead](src/mod_bighead/) | Scales the head bone of player and enemies to make their heads bigger. |
+| [Doorskip](src/mod_doorskip/) | Skips the door-opening transition animations that mask loading times. |
+| [Healthbar](src/mod_healthbar/) | Displays HP bars above player and enemies using Add_line rendering. |
+| [Mod Launcher](src/mod_launcher/) | Proxy DLL that loads multiple mod DLLs from mods_list.ini. |
 ## Setup
 
 1. Copy each mod folder into the RE1 game directory (next to `Bio.exe`)
