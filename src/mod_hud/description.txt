@@ -1,0 +1,7 @@
+Resident Evil 1 HUD overlay, showing a compact real-time gameplay HUD with inventory icons, weapon ammo quantities, current weapon highlight and optional health / equipped weapon panels.
+
+- Inventory panel displays item icons directly from game memory, with ammo counts shown for weapons by default.
+- Current equipped weapon can be highlighted in the inventory grid.
+- Optional health ECG and equipped weapon display can be enabled or disabled in mod_hud.ini.
+- If mod_hud.ini is missing, the mod creates a default config next to mod-hud.dll on first run.
+- Intended for the Classic REbirth / RE1 mod loader setup.
